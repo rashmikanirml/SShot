@@ -151,6 +151,71 @@ button:disabled {
   background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%);
 }
 
+.annotator-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tool {
+  border: 1px solid #bac7d5;
+  background: #f4f7fa;
+  color: #203244;
+  font-weight: 600;
+  font-size: 0.84rem;
+  border-radius: 9px;
+  padding: 7px 10px;
+}
+
+.tool:hover:enabled {
+  transform: translateY(-1px);
+}
+
+.tool-active {
+  border-color: #0d5db8;
+  background: #e5f0fc;
+  color: #0a4a92;
+}
+
+.annotator-surface {
+  width: 100%;
+  min-height: 240px;
+  border: 1px dashed #a8b6c5;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(13, 93, 184, 0.08),
+      rgba(13, 93, 184, 0.08) 8px,
+      rgba(13, 93, 184, 0.12) 8px,
+      rgba(13, 93, 184, 0.12) 16px
+    ),
+    #eef4fa;
+  position: relative;
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.annotator-empty {
+  display: grid;
+  place-items: center;
+  cursor: default;
+}
+
+.surface-label {
+  margin: 10px 12px 0;
+  color: #1f3a57;
+  font-size: 0.85rem;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .feature-list {
   margin: 0;
   padding-left: 18px;
@@ -171,6 +236,19 @@ button:disabled {
 .empty-state {
   margin: 0;
   color: var(--ink-700);
+}
+
+.workflow-row {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ocr-preview {
+  margin: 10px 0 0;
+  color: #31465c;
+  font-size: 0.88rem;
 }
 
 @media (max-width: 760px) {

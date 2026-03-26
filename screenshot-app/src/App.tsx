@@ -4,6 +4,36 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 
 type CaptureMode = "area" | "fullscreen" | "window";
+type Tool = "arrow" | "text" | "blur";
+
+type Point = {
+  x: number;
+  y: number;
+};
+
+type ArrowAnnotation = {
+  id: string;
+  kind: "arrow";
+  from: Point;
+  to: Point;
+};
+
+type TextAnnotation = {
+  id: string;
+  kind: "text";
+  at: Point;
+  content: string;
+};
+
+type BlurAnnotation = {
+  id: string;
+  kind: "blur";
+  at: Point;
+  width: number;
+  height: number;
+};
+
+type Annotation = ArrowAnnotation | TextAnnotation | BlurAnnotation;
 
 type CaptureResult = {
   mode: CaptureMode;
@@ -17,6 +47,9 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("Checking app focus...");
   const [lastCapture, setLastCapture] = useState<CaptureResult | null>(null);
+  const [tool, setTool] = useState<Tool>("arrow");
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [ocrText, setOcrText] = useState("No OCR run yet.");
 
   const windowHandle = useMemo(() => getCurrentWindow(), []);
 
@@ -84,6 +117,7 @@ function App() {
 
       const result = await invoke<CaptureResult>(command);
       setLastCapture(result);
+      setAnnotations([]);
       setStatus(result.message);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Unknown error";
@@ -91,6 +125,87 @@ function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function createArrow(point: Point): ArrowAnnotation {
+    return {
+      id: crypto.randomUUID(),
+      kind: "arrow",
+      from: point,
+      to: {
+        x: Math.min(95, point.x + 20),
+        y: Math.max(5, point.y - 12),
+      },
+    };
+  }
+
+  function createText(point: Point): TextAnnotation {
+    const text = window.prompt("Text annotation", "Review this section")?.trim();
+
+    return {
+      id: crypto.randomUUID(),
+      kind: "text",
+      at: point,
+      content: text && text.length > 0 ? text : "Note",
+    };
+  }
+
+  function createBlur(point: Point): BlurAnnotation {
+    return {
+      id: crypto.randomUUID(),
+      kind: "blur",
+      at: {
+        x: Math.max(4, point.x - 10),
+        y: Math.max(4, point.y - 8),
+      },
+      width: 22,
+      height: 16,
+    };
+  }
+
+  function addAnnotation(event: React.MouseEvent<HTMLDivElement>) {
+    if (!lastCapture || !active) {
+      return;
+    }
+
+    const targetRect = event.currentTarget.getBoundingClientRect();
+    const point = {
+      x: ((event.clientX - targetRect.left) / targetRect.width) * 100,
+      y: ((event.clientY - targetRect.top) / targetRect.height) * 100,
+    };
+
+    const next: Annotation =
+      tool === "arrow"
+        ? createArrow(point)
+        : tool === "text"
+          ? createText(point)
+          : createBlur(point);
+
+    setAnnotations((current) => [...current, next]);
+  }
+
+  function undoAnnotation() {
+    setAnnotations((current) => current.slice(0, -1));
+  }
+
+  function clearAnnotations() {
+    setAnnotations([]);
+  }
+
+  function runOcrStub() {
+    if (!lastCapture) {
+      return;
+    }
+
+    setOcrText(
+      `OCR preview for ${lastCapture.mode}: extracted text pipeline is next and will read directly from ${lastCapture.savedPath}.`
+    );
+  }
+
+  function runScrollCaptureStub() {
+    setStatus(
+      "Scrolling capture workflow queued. Stitching engine integration is in the next backend slice."
+    );
   }
 
 
@@ -140,12 +255,113 @@ function App() {
       </section>
 
       <section className="panel panel-secondary">
-        <h2>Implementation Status</h2>
-        <ul className="feature-list">
-          <li>Annotation pipeline scaffolded (arrow, text, blur placeholders).</li>
-          <li>OCR module scheduled for next implementation slice.</li>
-          <li>Scrolling capture engine stubbed for phased delivery.</li>
-        </ul>
+        <header className="panel-header">
+          <h2>Annotation Studio</h2>
+        </header>
+
+        <div className="annotator-controls">
+          <button
+            type="button"
+            className={tool === "arrow" ? "tool tool-active" : "tool"}
+            onClick={() => setTool("arrow")}
+            disabled={!lastCapture}
+          >
+            Arrow
+          </button>
+          <button
+            type="button"
+            className={tool === "text" ? "tool tool-active" : "tool"}
+            onClick={() => setTool("text")}
+            disabled={!lastCapture}
+          >
+            Text
+          </button>
+          <button
+            type="button"
+            className={tool === "blur" ? "tool tool-active" : "tool"}
+            onClick={() => setTool("blur")}
+            disabled={!lastCapture}
+          >
+            Blur
+          </button>
+          <button type="button" className="tool" onClick={undoAnnotation} disabled={!annotations.length}>
+            Undo
+          </button>
+          <button type="button" className="tool" onClick={clearAnnotations} disabled={!annotations.length}>
+            Clear
+          </button>
+        </div>
+
+        <div
+          className={lastCapture ? "annotator-surface" : "annotator-surface annotator-empty"}
+          onClick={addAnnotation}
+          role="presentation"
+        >
+          {lastCapture ? (
+            <>
+              <p className="surface-label">Click anywhere to place a {tool} annotation.</p>
+              <svg className="overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <defs>
+                  <marker
+                    id="arrow-tip"
+                    markerWidth="6"
+                    markerHeight="6"
+                    refX="5"
+                    refY="3"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L6,3 L0,6 z" fill="#0d5db8" />
+                  </marker>
+                </defs>
+
+                {annotations.map((item) => {
+                  if (item.kind === "arrow") {
+                    return (
+                      <line
+                        key={item.id}
+                        x1={item.from.x}
+                        y1={item.from.y}
+                        x2={item.to.x}
+                        y2={item.to.y}
+                        stroke="#0d5db8"
+                        strokeWidth="1.2"
+                        markerEnd="url(#arrow-tip)"
+                      />
+                    );
+                  }
+
+                  if (item.kind === "blur") {
+                    return (
+                      <rect
+                        key={item.id}
+                        x={item.at.x}
+                        y={item.at.y}
+                        width={item.width}
+                        height={item.height}
+                        fill="rgba(43, 54, 66, 0.45)"
+                      />
+                    );
+                  }
+
+                  return (
+                    <text
+                      key={item.id}
+                      x={item.at.x}
+                      y={item.at.y}
+                      fill="#142f4d"
+                      fontSize="3.5"
+                      fontWeight="600"
+                    >
+                      {item.content}
+                    </text>
+                  );
+                })}
+              </svg>
+            </>
+          ) : (
+            <p className="empty-state">Capture an image first to start annotating.</p>
+          )}
+        </div>
       </section>
 
       <section className="panel panel-secondary">
@@ -165,6 +381,16 @@ function App() {
         ) : (
           <p className="empty-state">No capture yet in this session.</p>
         )}
+
+        <div className="workflow-row">
+          <button type="button" className="tool" onClick={runOcrStub} disabled={!lastCapture}>
+            Run OCR
+          </button>
+          <button type="button" className="tool" onClick={runScrollCaptureStub} disabled={!active}>
+            Scrolling Capture
+          </button>
+        </div>
+        <p className="ocr-preview">{ocrText}</p>
       </section>
     </main>
   );
