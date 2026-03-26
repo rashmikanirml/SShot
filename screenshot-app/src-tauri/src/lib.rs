@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{Mutex, MutexGuard},
+    sync::Mutex,
 };
 
 #[derive(Default)]
@@ -22,15 +22,11 @@ struct CaptureResult {
     timestamp: String,
 }
 
-fn lock_active_flag(state: &tauri::State<AppState>) -> Result<MutexGuard<'_, bool>, String> {
-    state
+fn ensure_active(state: &tauri::State<AppState>) -> Result<(), String> {
+    let is_active = *state
         .is_window_active
         .lock()
-        .map_err(|_| "Failed to read app focus state.".to_string())
-}
-
-fn ensure_active(state: &tauri::State<AppState>) -> Result<(), String> {
-    let is_active = *lock_active_flag(state)?;
+        .map_err(|_| "Failed to read app focus state.".to_string())?;
 
     if is_active {
         Ok(())
@@ -149,7 +145,10 @@ fn capture_window_impl() -> Result<CaptureResult, String> {
 
 #[tauri::command]
 fn set_window_active(state: tauri::State<AppState>, active: bool) -> Result<(), String> {
-    let mut current = lock_active_flag(&state)?;
+    let mut current = state
+        .is_window_active
+        .lock()
+        .map_err(|_| "Failed to read app focus state.".to_string())?;
     *current = active;
     Ok(())
 }
