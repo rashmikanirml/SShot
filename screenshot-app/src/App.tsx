@@ -53,12 +53,18 @@ function App() {
 
   const windowHandle = useMemo(() => getCurrentWindow(), []);
 
+  async function syncWindowActiveState() {
+    const isFocused = await windowHandle.isFocused();
+    await invoke("set_window_active", { active: isFocused });
+    setActive(isFocused);
+    return isFocused;
+  }
+
   useEffect(() => {
     let mounted = true;
 
     const syncState = async () => {
-      const isFocused = await windowHandle.isFocused();
-      await invoke("set_window_active", { active: isFocused });
+      const isFocused = await syncWindowActiveState();
 
       if (!mounted) {
         return;
@@ -100,7 +106,13 @@ function App() {
   }, [windowHandle]);
 
   async function runCapture(mode: CaptureMode) {
-    if (!active || busy) {
+    if (busy) {
+      return;
+    }
+
+    const isFocused = await syncWindowActiveState();
+    if (!isFocused) {
+      setStatus("Capture paused. Click this app window first, then try again.");
       return;
     }
 
@@ -233,21 +245,21 @@ function App() {
           <button
             type="button"
             onClick={() => runCapture("area")}
-            disabled={!active || busy}
+            disabled={busy}
           >
             Area Capture
           </button>
           <button
             type="button"
             onClick={() => runCapture("fullscreen")}
-            disabled={!active || busy}
+            disabled={busy}
           >
             Full Screen
           </button>
           <button
             type="button"
             onClick={() => runCapture("window")}
-            disabled={!active || busy}
+            disabled={busy}
           >
             Window Capture
           </button>
